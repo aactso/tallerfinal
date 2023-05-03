@@ -1,0 +1,592 @@
+---
+title: "Taller de Econometría Aplicada: práctica Final"
+author: "Anna Alejandra Cortes Ordoñez"
+date: "2023-04-22"
+output: pdf_document
+encoding: UTF-8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r librerias, echo=FALSE, warning=FALSE, include=FALSE}
+library(dagitty)
+library(ggplot2)
+library(psych)
+library(cobalt)
+library(dplyr)
+library(tidyr)
+```
+
+```{r setwd, echo=FALSE}
+setwd("/Users/alecortes/Desktop/practica final Taller/")
+```
+
+```{r files,echo=FALSE}
+datos<-read.csv("fake.csv")
+attach(datos)
+```
+
+
+
+## 1. Escriba una introducción del análisis que realizará con ayuda de este conjunto de datos de acuerdo al contexto del problema.  
+
+
+A partir de finales del siglo XVII, los diarios se convirtieron en el principal medio para difundir la actividad de los periodistas. En en siglo XX surgieron la radio y la televisión. En la actualidad, el Internet se ha convertido en otro medio importante para la difusión de información. Con el paso de los años se busca que el número de noticias a disposición de los ciudadanos aumente, junto con la velocidad de transmisión de las mismas. Con ello, a pesar de que se ha hecho más eficaz la difusión de las noticias y que cualquier persona puede escribir un texto y publicarlo han surgido retros frente a un mayor número de noticias falsas *fake news*.  
+Con ayuda de un subconjunto de datos obtenido de *Believing and Sharing Information by Fake Sources: An Experiment* de Bauer y Clemm von Hohenberg (2020) basados en un experimento de una encuesta en el que los individuos fueron asignados aleatoriamente a dos versiones de un informe de noticias en el que solo se varió el nombre de la fuente (y el diseño) se pretende determinar si las fuentes de información falsas se creen sustancialmente menos que las fuentes reales. Así, con ayuda de las variables:  
+
+* d_treatment_source: reporta si la fuente es falsa o no  
+* y_belief_report_: mide si se cree en la veracidad del informe en una escala del 0 al 6.  
+* y_share_report_: mide si alguien compartiría el reporte en distintas plataformas (email, facebook, twitter y whatsapp), dummy que toma valores 0 y 1  
+* x_age: edad   
+* x_sex_: género  
+* x_income_: nivel de ingreso en una escala del 1 al 11  
+* x_education_: nivel de educación en una escala del 0 al 5  
+
+Dadas las variables se pretende caracterizar a la población y comprender si las personas tienden a creer más en noticias reales o falsas, si comparten más noticias de fuentes reales o falsas, si las personas que vieron noticias congruentes (versus incongruentes) de
+una fuente tienen una mayor tendencia a creer y compartir noticias posteriores de la misma fuente; por último, la diferencia en la creencia y en la propensión a compartir noticias posteriores entre aquellos que vieron informes congruentes y aquellos que vieron
+informes incongruentes es mayor para la fuente falsa que para la fuente verdadera. Con la finalidad de comprender el comportamiento de las personas ante *fake news* y su posible propagación a través de medios digitales, pues en la actualidad a parte de poder redactar una noticia falsa también es posible crear imágenes falsas utilizando inteligencia artificial. 
+
+\newpage
+
+## 2. Ilustre correctamente los factores considerados en dicho análisis. Para ello, realice el gráfico directo acíclico (DAG) que muestre la teoría de cambio detrás de la relación causal que busca analizar y cuantificar el artículo.
+
+
+
+```{r preg2dag, echo=FALSE}
+g2<-dagitty('dag{
+"Género" [pos="0,0"]
+"Ingreso" [pos="1,1"]
+"Educación" [pos="1,0"]
+"Creencia de la veracidad" [pos="2,0"]
+"Compartir en diferentes redes" [pos="2,1.5"]
+"Edad" [pos="0,1.5"]
+"Tratamiento" [pos="1,1.5"]
+"Género"->"Ingreso"->"Creencia de la veracidad"
+"Género"->"Educación"->"Creencia de la veracidad"
+"Educación"->"Ingreso"
+"Edad"->"Educación"->"Creencia de la veracidad"
+"Edad"->"Ingreso"->"Creencia de la veracidad"
+"Tratamiento"->"Creencia de la veracidad"
+"Género"->"Ingreso"->"Compartir en diferentes redes"
+"Género"->"Educación"->"Compartir en diferentes redes"
+"Educación"->"Ingreso"
+"Edad"->"Educación"->"Compartir en diferentes redes"
+"Edad"->"Ingreso"->"Compartir en diferentes redes"
+"Tratamiento"->"Compartir en diferentes redes"
+}')
+
+plot(g2)
+```
+
+
+
+Con base en las variables otorgadas realice el gráfico directo aciclico para mostrar la teoría de cambio detras de la relación causal que se busca analizar. Especificamente, la relación causal entre la edad y el ingreso, ya que dependiendo de la edad la persona puede tener más años de experiencia laboral y tener un mejor ingreso. Así mismo, entre edad y educación, ya que a mayor edad habrá más oportunidades para que una persona haya concluido más años de estudio. Por otro lado, el género resulta un efecto causal del ingreso, ya que en el mercado laboral puede existir mayores/menores oportunidades según el género de la persona y con un ingreso mayor o menor con base en ello. Con base en la ONU las causas de la brecha salarial (la diferencia entre el salario de los hombres y las mujeres, dividida entre el salario de los hombres) son: empleo a tiempo parcial, peores empleos, trabajos socialmente menos valorados, autominusvaloración e ignorancia de los empleadores. También se encuentra la relación entre género y educación, pues en muchos casos las mujeres tienen menos oportunidades para estudiar.  
+Con ello sumado el tratamiento es que el ingreso y la educación tienen un efecto causal sobre las variables de interes "creencia de la veracidad" y "compartir la noticia en distintas redes", pues frente a un mayor ingreso y educaciñon la persona podría tener bases más solidas y permitir cuestionarse sobre la veracidad de noticias que lee en internet. 
+
+
+\newpage
+
+## 3. Describa de manera general el diseño del experimento aleatorizado: participantes, variables de respuesta, clasificación de grupos de tratamiento y control y covariables. Mencione cómo se implementó el experimento en la práctica para probar las hipótesis de trabajo planteadas
+
+El experimento realizado por Paul C. Bauer (MZES) & Bernhard Clemm von Hohenberg (EUI) en *Believing and Sharing Information by Fake Sources: An Experiment* toma en cuenta una encuesta en línea realizada entre el 14 y 29 de marzo de 2019, con preregistro el 12 de marzo de 2019. Los **participantes** eran alemanes recultados por la empresa de encuestas Respondi AG. Con el fin de cumplir con validez externa (la capacidad de generalizar los resultados del experimento en una población distinta a la estudiada) se seleccionaron encuestados según género, edad y estado de residencia. Se excluyeron a 125 encuestados que no habían completado el cuestionario. También, se excluyeron 308 respuestas de aquellos que completaron el cuestionario en menos de la mitad del tiempo promedio. Así la muestra final incluyó 1980 participantes.  
+A lo largo de los años diversos estudios psicológicos se han preguntado cómo se establece la transmisión con base en la fuente por la cual es publicada y cómo afectan la opinión de los lectores; sin embargo, todos estos estudios fueron realizados antes de que las fake news fueran un tema tan relevante como lo es actualmente. Así, Bauer y Clemm von Hohenberg continuaron co nesta idea asumiendo que las personas actuan de manera subjetiva respecto a las noticias de acuerdo a la fuente y así dictaminan el outcome de creer en la noticia y sus intenciones de compartirla. Con base en lo anterior, escogieron sus **variables de respuesta** al considerar importante el impacto de las fake news en la era digital, pues las personas no saben exante si la noticia es verdadera o falsa y no tienen tiempo para revisarlo; con ello, la fuente toma importancia. Así, la pregunta es si las fuentes de información falsas son menos creibles para el público que las verdaderas. Adaptaron una gran medida de distintos medios para compartir noticias dentro de sus variables de respuesta.  
+Para ello, la **clasificación de grupos de tratamiento y control** se dio posterior a las preguntas que respondieron los participantes respecto aa consentimiento, socio demográficas, conocimiento en fuentes de noticias, sentimiento respecto a inmigrantes, uso de redes sociales, disposición a compartir información en redes y conocimiento político. De manera aleatoria se asignaron los participantes a 4 grupos de tratamiento, en los cuales debían leer 5 reportes con variedad de tipo noticias asignadas de manera aleatoria entre participantes con el fin de que recibieran 5 reportes cada uno de alguna de las dos fuentes (original y falsa).  
+Para construir la fuente real utilizaron un nombre que asemejra la apariencia de Tagesschau, la sección de noticias más grande que se publica en alemán y para la fuente falsa se creó el nombre Nachrichten 360, ya que suena neutral y no tiende ninguna tendencia hacia alguna ideología y un logo neutral para que pareciera una fuente creible. De los 5 reportes: el primer era verdadero e idéntico para todos los participantes, Los reportes 2, 3 y 4 fueron asignados aleatoriamente sobre a favor de la inmigración y anti inmigración (a dos grupos les tocaban anti y a dos a favor). Así, una versión sería conveniente para los que están a favor y la otra para aquellos que no. El quinto reporte era información verdadera e igual para todos los participantes. De los cuatro grupos: dos recibian información de la fuente Tagesschau (real) y dos de Nachrichten 360 (falsa).  
+La lista de **covariables** incluye: edad, género, en cuál estado viven, si conocen ciertas fuentes de información, si han leído de alguna de esas fuentes, si confían en la información de las fuentes, opinión respecto a inmigración y qué implicación tiene sobre economía, seguridad, vida y mayor control fronterizo. A su vez, se preguntó que plataformas utilizan, frecuencia con la que comparten información, conocimiento político, "overconfidence", nivel de educación, si votaron en las elecciones de 2017, por quién votaron y su ingreso neto.  
+Como se mencionó anteriormente los participantes debían leer 5 reportes, el 1 y 5 eran verdaderos para todos los participantes y del 2 al 4 fueron manipulados entre información a favor o en contra de la inmigración. Así **el experimento se implementó** en la división en tratamiento que se expuso en la clasificación y los reportes trataban de temas diversos acerca de inmigración. El primer reprte era acerca de el número de reuniones familiares entre refugiados en Alemania, el segundo reporte (manipulado) era acerca de estadísitca de crímenes por parte de inmigrantes, el tercer reporte (manipulado) tenia datos de los resultados de reugiados en exámenes de lenguaje, el cuarto reporte (manipulado) tenía datos de rescates marítimos en el mediterráneo y el quinto reporte (verdadero) era de subsidios a los inmigrantes. Para los reportes 1 y 5 fueron tomados de fuentes poco compartidas para evitar que muchos de los encuestados hayan leído dichos reportes. 
+
+\newpage
+
+## 4. Luego de leer el conjunto de datos, realice un análisis exploratorio de las variables y describa su comportamiento. Tome en cuenta que hay un grupo de variables numéricas y otras categóricas que deben ser descritas de manera particular de acuerdo a su naturaleza (ver apéndice 2)
+
+Con base en el conjunto de datos en la siguiente gráfica observamos que la distribución entre hombres y mujeres es similar. Así, es proporcional la cantidad de hombres y mujeres. Con datos del último censo de población en Alemania, solo hay 2 millones más de mujeres que hombres (total de 83.2 millones de habitantes), del mismo modo hay un número mayor de mujeres que hombres en el conjunto de datos pero no es desproporcional.  
+```{r 3gen, echo=FALSE}
+ggplot(datos, aes(x=x_sex_fac)) +
+  ggtitle("Distribución género de los encuestados")+
+  xlab("Género")+
+  geom_bar(color="black", fill="#000080")+ 
+  theme_classic()
+```
+
+
+Posteriormente, observamos como se comporta la edad de los encuestados. Así observamos una mayor concentración por debajo de los 20 años, con un promedio de 46.53 (47 años) y una desviación estándar que cubre de los 31 a los 60 años. Es importante resaltar que el promedio de edad en Alemania es de 35 años. Este se encuentra a menos de una desviaicón estandar del promedio del conjunto de datos que tenemos.  
+```{r 3edad, echo=FALSE, warning=FALSE}
+ggplot(datos, aes(x=x_age)) +
+  ggtitle("Distribución edad de los encuestados")+
+  xlab("Edad")+
+  geom_bar(color="black", fill="#000080")+ 
+  theme_classic()
+  
+```
+
+Con base en los datos se observa que una mayor cantidad de población tiene un ingreso entre 2,000 y 2,500 euros. En este caso es importante destacar que como se observa en la gráfica que una menor cantidad de los encuestados gana al rededor de 4,587 euros que es el promedio del ingreso en Alemania. Con base en el artículo y de acuerdo con otros estudios el rol de la educaicón y el ingreso esta correlacionado con la habilidad de distinguir entre sitios de internet profesionales y no profesionales.  
+
+```{r 3ing, echo=FALSE, warning=FALSE}
+ggplot(datos, aes(x=x_income_fac)) +
+  ggtitle("Distribución ingreso de los encuestados")+
+  xlab("Ingreso")+
+  geom_bar(color="black", fill="#000080")+ 
+  theme_classic()+
+  theme(axis.text = element_text(angle = 20))
+```
+
+
+De acuerdo con datos de la OCDE "el 86% de los adultos de 25 a 64 años han terminado la educación media superior". Así, con esta base de datos se observa que la mayoría completó la educación media, seguido de la universidad que va de acuerdo con el promedio de la poblacióon alemana.  
+
+```{r 3ed, echo=FALSE,warning=FALSE}
+ggplot(datos, aes(x=x_education_fac)) +
+  ggtitle("Distribución educación de los encuestados")+
+  xlab("Educación")+
+  geom_bar(color="black", fill="#000080")+ 
+  theme_classic()+
+  theme(axis.text = element_text(angle = 3))
+  
+```
+
+
+Con base en la siguiente tabla de las variables numéricas los valores que destacan son que en promedio las personas comparten más noticias a través de twitter seguido de facebook, whatsapp y correo. A su vez, al realizar un comparativo con la población alemana, el promedio de edad está a menos de una desviación estandar de los resultados obtenidos.  
+```{r stats, echo=FALSE,warning=FALSE,comment=NA}
+num<-datos[,c(2:6,12,14,16,19)]
+describeBy(num,fast=TRUE)
+```
+
+
+```{r,echo=FALSE,include=FALSE}
+datos_cat <- datos %>%
+  select(x_education_fac, x_income_fac)
+
+cat1 <- datos_cat %>%
+  group_by(x_education_fac) %>%
+  count()
+
+cat2 <- datos_cat %>%
+  group_by(x_income_fac) %>%
+  count()
+```
+
+\newpage
+
+Con base en los siguientes datos de variables categóricas, en el caso de la educación se observa que en un mayor número de encuestados terminó "middle school" seguiod de "high school", la menor proporción de individuos fueron los que únicamente obtuvieron "technical high school".  
+```{r,echo=FALSE,comment=NA}
+cat1
+```
+
+Ahora respecto al ingreso, observamos una mayor cantidad de encuestados entre 2,000 y 2,500 euros y una menor proporción debajo de los mil euros y entre 4,500 y 5,000 euros mensuales. 
+```{r,echo=FALSE,comment=NA}
+cat2
+```
+## 5. Realice los cuadros de balance para verificar la aleatorización del experimento. En la medida de lo posible, replique los cuadros del apéndice 3. Interprete sus resultados.
+
+```{r,echo=FALSE}
+Nachrichten <- subset(datos, d_treatment_source == 0)
+Tagesschau <- subset(datos, d_treatment_source == 1)
+```
+
+```{r,echo=FALSE,warning=FALSE}
+media_Nachrichten <- mean(Nachrichten$x_age)
+media_Tagesschau <- mean(Tagesschau$x_age)
+media_Nachrichtens <- mean(Nachrichten$x_sex_num)
+media_Tagesschaus <- mean(Tagesschau$x_sex_num)
+sd_Nachrichten <- sd(Nachrichten$x_age)
+sd_Tagesschau <- sd(Tagesschau$x_age)
+sd_Nachrichtens <- sd(Nachrichten$x_sex_num)
+sd_Tagesschaus <- sd(Tagesschau$x_sex_num)
+```
+
+
+La tabla de balance de la media y desviación estándar de la edad entre los grupos de tratamiento que recibieron la noticia falsa Nachrichten y la verdadera Tagesschau observamos que al comparar la edad entre ambos grupos no es muy distinta y la desviación estándar tampoco. Al igual que como se ha mencionado anteriormente, es similar a la edad promedio de la población alemana.  
+```{r,echo=FALSE}
+(tabla_balance <- data.frame(
+  Grupo = c("Nachrichten Edad", "Tagesschau Edad"),
+  Media = c(media_Nachrichten, media_Tagesschau),
+  SD = c(sd_Nachrichten, sd_Tagesschau)
+))
+```
+
+
+Con base en el ingreso observamos mayor balance entre ambos grupos tanto del promedio como de la desviación estándar.  
+```{r,echo=FALSE}
+(tabla_balance2 <- data.frame(
+  Grupo = c("Nachrichten Género", "Tagesschau Género"),
+  Media = c(media_Nachrichtens, media_Tagesschaus),
+  SD = c(sd_Nachrichtens, sd_Tagesschaus)
+))
+```
+
+
+
+## 6. Dado que los supuestos SUTVA e independencia son válidos, compare el resultado promedio en el tratamiento y el control mediante pruebas simples t. Para ello, en R puede utilizar la función t.test().
+
+En la escala del 0-6 si la persona cree en el reporte con base en la siguiente prueba simple t observamos que el valor p es menor que el nivel de significancia. Así, podemos rechazar la hipótesis nula y concluir que no hay evidencia suficiente que demuestre que la diferencia del promedio de la creencia entre el reporte real y falso es igual a cero. Esto quiere decir que es distinto el promedio de creencia para ambos grupos (recordemos que un grupo recibió una noticia real y el otro una noticia falsa)  
+
+```{r, echo=FALSE,comment=NA}
+t.test(y_belief_report_num ~ d_treatment_source,
+         data = datos, 
+         na.action = "na.omit", 
+         var.equal = TRUE)
+```
+
+
+
+Con base en la siguiente prueba simple t observamos que el valor-p es mayor pero muy cercano al nivel de significancia. Así, al aumentar el nivel de significancia podemos rechazar la hipótesis nula y concluir que no hay evidencia suficiente que demuestre que la diferencia del promedio de compartir el reporte via email entre el falso y veradero es igual a cero. Con ello, hay promedios distintos entre el grupo que recibio la noticia real y el grupo que tuvo la noticia falsa.  
+
+
+```{r, echo=FALSE,comment=NA}
+t.test( y_share_report_email_num~ d_treatment_source,
+         data = datos, 
+         na.action = "na.omit", 
+         var.equal = TRUE)
+```
+
+Al igual que en los otros dos casos al tomar en cuenta compartir el reporte en facebook y whatsapp podemos rechazar la hipótesis nula y concluir que no hay evidencia suficiente que demuestre que la diferencia del promedio de compartir el reporte via facebook o whatsapp entre el falso y verdadero es igual a cero.  
+```{r, echo=FALSE,comment=NA}
+t.test(y_share_report_fb_num~ d_treatment_source,
+         data = datos, 
+         na.action = "na.omit", 
+         var.equal = TRUE)
+```
+
+
+```{r, echo=FALSE,comment=NA}
+t.test(y_share_report_whatsapp_num~ d_treatment_source,
+         data = datos, 
+         na.action = "na.omit", 
+         var.equal = TRUE)
+```
+
+
+Sin embargo, el valor p de compartir la noticia en twitter es mayor al nivel de significancia. Así no hay evidencia suficiente para rechazar la hipótesis nula de que la diferencia del promedio de ambos grupos es igual a cero. 
+```{r, echo=FALSE,comment=NA}
+t.test(y_share_report_twitter_num~ d_treatment_source,
+         data = datos, 
+         na.action = "na.omit", 
+         var.equal = TRUE)
+```
+
+\newpage
+
+## 7. Muestre gráficamente los efectos que tiene la fuente en la posibilidad de creer en las noticias y en la propensión a compartirlas. Esto es, replique los gráficos de la figura 3 (pág. 13). Interprete estos resultados y concluya en el contexto del problema de acuerdo a las hipótesis planteadas.
+
+
+```{r,echo=FALSE,include=FALSE}
+  data_plot <- datos %>% 
+    group_by(d_treatment_source) %>% 
+    dplyr::select(y_belief_report_num) %>% 
+    group_by(n_rows = n(), add = TRUE) %>% 
+    summarize_all(funs(mean, var, sd, n_na = sum(is.na(.))), na.rm = TRUE) %>% 
+    mutate(n = n_rows - n_na) %>% 
+    mutate(se = sqrt(var/n),
+           ci.error = qt(0.975,df=n-1)*sd/sqrt(n),
+           conf.low = mean - ci.error,
+           conf.high = mean + ci.error) %>%
+    mutate(Group = ifelse(d_treatment_source == 1, "Tagesschau", "Nachrichten 360")) %>%
+    mutate(outcome = "Belief")
+```
+
+
+Con base en este primer resultado observamos que la gente cree más en el reporte de la noticia verdadera que el de la noticia falsa.  
+```{r,echo=FALSE,warning=FALSE}
+  ggplot(data_plot, aes(x=outcome,
+                        y=mean, 
+                        group=as.factor(d_treatment_source), 
+                        color=as.factor(d_treatment_source))) + 
+      geom_point(position = position_dodge(0.4), size = 1.1) +
+      geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width=.3, 
+                     position = position_dodge(0.4), size = 0.7) +
+    labs(title = "Resultado: Creencia ",
+         x = "", 
+         y = "Creencia Reporte (0-6)") +
+    scale_color_manual(values=c('red','blue'), 
+                       labels = c("Nachrichten 360 (fake)", "Tagesschau (real)"),
+                       name = "Fuente:")+
+    theme_classic() + 
+    theme(panel.grid.major.x = element_blank()) +
+    ylim(2, 5)
+```
+
+```{r,echo=FALSE,include=FALSE}
+  data_plot2 <- datos %>% 
+    group_by(d_treatment_source) %>% 
+    dplyr::select(y_share_report_email_num) %>% 
+    group_by(n_rows = n(), add = TRUE) %>% 
+    summarize_all(funs(mean, var, sd, n_na = sum(is.na(.))), na.rm = TRUE) %>% 
+    mutate(n = n_rows - n_na) %>% 
+    mutate(se = sqrt(var/n),
+           ci.error = qt(0.975,df=n-1)*sd/sqrt(n),
+           conf.low = mean - ci.error,
+           conf.high = mean + ci.error) %>%
+    mutate(Group = ifelse(d_treatment_source == 1, "Tagesschau", "Nachrichten 360")) %>%
+    mutate(outcome = "Compartir via Email")
+```
+
+En los siguientes boxplots se respetan los ejes 0 a 1 para que sean comparables entre ellos.  
+
+Observamos que un mayor número de encuestados compartirían el reporte real que el fake. Observamos que el rango de los valores que se encuentran fuera del rango intercuartílico superior de la noticia falsa está muy cerca del inferior de la noticia verdadera.  
+```{r,echo=FALSE,warning=FALSE}
+  ggplot(data_plot2, aes(x=outcome,
+                        y=mean, 
+                        group=as.factor(d_treatment_source), 
+                        color=as.factor(d_treatment_source))) + 
+      geom_point(position = position_dodge(0.4), size = 1.1) +
+      geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width=.3, 
+                     position = position_dodge(0.4), size = 0.7) +
+    labs(title = "Resultado: Compartir via email ",
+         x = "", 
+         y = "Compartir via email") +
+    scale_color_manual(values=c('red','blue'), 
+                       labels = c("Nachrichten 360 (fake)", "Tagesschau (real)"),
+                       name = "Fuente:")+
+    theme_classic() + 
+    theme(panel.grid.major.x = element_blank()) +
+    ylim(0, 1)
+```
+
+```{r,echo=FALSE,include=FALSE}
+  data_plot3 <- datos %>% 
+    group_by(d_treatment_source) %>% 
+    dplyr::select(y_share_report_fb_num) %>% 
+    group_by(n_rows = n(), add = TRUE) %>% 
+    summarize_all(funs(mean, var, sd, n_na = sum(is.na(.))), na.rm = TRUE) %>% 
+    mutate(n = n_rows - n_na) %>% 
+    mutate(se = sqrt(var/n),
+           ci.error = qt(0.975,df=n-1)*sd/sqrt(n),
+           conf.low = mean - ci.error,
+           conf.high = mean + ci.error) %>%
+    mutate(Group = ifelse(d_treatment_source == 1, "Tagesschau", "Nachrichten 360")) %>%
+    mutate(outcome = "Compartir via Facebook")
+```
+
+Del mismo modo que el diagrama anterior las personas contestaron que compartirían la noticia verdadera a la falsa. En este caso el rango de los valores que se encuentran fuera del rango intercuartílico está más separado que lo expuesto anteriormente. 
+
+```{r,echo=FALSE,warning=FALSE}
+  ggplot(data_plot3, aes(x=outcome,
+                        y=mean, 
+                        group=as.factor(d_treatment_source), 
+                        color=as.factor(d_treatment_source))) + 
+      geom_point(position = position_dodge(0.4), size = 1.1) +
+      geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width=.3, 
+                     position = position_dodge(0.4), size = 0.7) +
+    labs(title = "Resultado: Compartir via Facebook ",
+         x = "", 
+         y = "Compartir via Facebook") +
+    scale_color_manual(values=c('red','blue'), 
+                       labels = c("Nachrichten 360 (fake)", "Tagesschau (real)"),
+                       name = "Fuente:")+
+    theme_classic() + 
+    theme(panel.grid.major.x = element_blank()) +
+    ylim(0, 1)
+```
+  
+  
+```{r,echo=FALSE,include=FALSE}
+  data_plot4 <- datos %>% 
+    group_by(d_treatment_source) %>% 
+    dplyr::select(y_share_report_twitter_num) %>% 
+    group_by(n_rows = n(), add = TRUE) %>% 
+    summarize_all(funs(mean, var, sd, n_na = sum(is.na(.))), na.rm = TRUE) %>% 
+    mutate(n = n_rows - n_na) %>% 
+    mutate(se = sqrt(var/n),
+           ci.error = qt(0.975,df=n-1)*sd/sqrt(n),
+           conf.low = mean - ci.error,
+           conf.high = mean + ci.error) %>%
+    mutate(Group = ifelse(d_treatment_source == 1, "Tagesschau", "Nachrichten 360")) %>%
+    mutate(outcome = "Compartir via Twitter")
+```
+
+
+Compartir la noticia en twitter también es más factible que sea la verdadera a la falsa.  
+
+```{r,echo=FALSE,warning=FALSE}
+  ggplot(data_plot4, aes(x=outcome,
+                        y=mean, 
+                        group=as.factor(d_treatment_source), 
+                        color=as.factor(d_treatment_source))) + 
+      geom_point(position = position_dodge(0.4), size = 1.1) +
+      geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width=.3, 
+                     position = position_dodge(0.4), size = 0.7) +
+    labs(title = "Resultado: Compartir via Twitter ",
+         x = "", 
+         y = "Compartir via Twitter") +
+    scale_color_manual(values=c('red','blue'), 
+                       labels = c("Nachrichten 360 (fake)", "Tagesschau (real)"),
+                       name = "Fuente:")+
+    theme_classic() + 
+    theme(panel.grid.major.x = element_blank()) +
+    ylim(0, 1)
+```
+
+```{r,echo=FALSE,include=FALSE}
+  data_plot5 <- datos %>% 
+    group_by(d_treatment_source) %>% 
+    dplyr::select(y_share_report_whatsapp_num) %>% 
+    group_by(n_rows = n(), add = TRUE) %>% 
+    summarize_all(funs(mean, var, sd, n_na = sum(is.na(.))), na.rm = TRUE) %>% 
+    mutate(n = n_rows - n_na) %>% 
+    mutate(se = sqrt(var/n),
+           ci.error = qt(0.975,df=n-1)*sd/sqrt(n),
+           conf.low = mean - ci.error,
+           conf.high = mean + ci.error) %>%
+    mutate(Group = ifelse(d_treatment_source == 1, "Tagesschau", "Nachrichten 360")) %>%
+    mutate(outcome = "Compartir via whatsapp")
+```
+Obtenemos resultados similares con Whatsapp  
+```{r,echo=FALSE,warning=FALSE}
+  ggplot(data_plot5, aes(x=outcome,
+                        y=mean, 
+                        group=as.factor(d_treatment_source), 
+                        color=as.factor(d_treatment_source))) + 
+      geom_point(position = position_dodge(0.4), size = 1.1) +
+      geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width=.3, 
+                     position = position_dodge(0.4), size = 0.7) +
+    labs(title = "Resultado: Compartir via Whatsapp ",
+         x = "", 
+         y = "Compartir via Whatsapp") +
+    scale_color_manual(values=c('red','blue'), 
+                       labels = c("Nachrichten 360 (fake)", "Tagesschau (real)"),
+                       name = "Fuente:")+
+    theme_classic() + 
+    theme(panel.grid.major.x = element_blank()) +
+    ylim(0, 1)
+```
+
+
+En los gráficos anteriores observamos en todos que las personas tienen preferencias por compartir la noticia verdadera más que la falsa a través de todos los medios de distribución (facebook, whatsapp, mail y twitter). Tomando en cuenta resultados anteriores las personas comparten más noticias a traves de twitter seguido de facebook, whatsapp y correo y en el gráfico correspondiente a Twitter observamos que por el rango  intercuartílico más gente es propensa a compartir información verdadera en Twitter. Esto es relevante, ya que facebook, instagram y twitter son las redes más visitadas en Alemania. En el caso de facebook también más gente compartiría la noticia real; sin embargo, es una menor proporción. 
+
+## 8. Ahora obtenga estos mismos resultados pero implementando sus cálculos mediante la estimación adecuada de mínimos cuadrados ordinarios. Incluya el análisis para las diferentes fuentes, la congruencia de la noticia y la posibilidad de la interacción. Esto es, replique los resultados de las tablas del anexo 9. ¿Qué conclusión obtiene de ellas? Interprete sus resultados en el contexto del problema de acuerdo a las hipótesis del estudio. No olvide comparar mediante pruebas t los efectos para cada una de las redes sociales
+
+\newpage
+
+Observamos que es significativo el tratamiento en todos los casos excepto en twitter. Esto es relevante pues twitter es la red social preferida para compartir noticias de los encuestados. Si tomamos en cuenta que hay menos observaciones en twitter y también las personas prefieren compartir noticias via facebook en este caso el tratamiento si es significativo. A su vez, observamos que el tratamiento de recibir la fuente real a la fake aumenta en mayor medida (.62 puntos en la escala) la creencia en el reporte. 
+
+```{r,echo=FALSE}
+lm1 <- lm(y_belief_report_num ~ d_treatment_source, data = datos)
+lm2 <- lm(y_share_report_email_num ~ d_treatment_source, data = datos)
+lm3 <-  lm(y_share_report_fb_num ~d_treatment_source, data = datos)
+lm4 <-  lm(y_share_report_twitter_num ~d_treatment_source, data = datos)
+lm5 <-  lm(y_share_report_whatsapp_num ~d_treatment_source, data = datos)
+```
+
+```{r,echo=FALSE,warning=FALSE,comment=NA}
+stargazer::stargazer(lm1, lm2, lm3,
+                     header=FALSE,
+                         summary = TRUE,
+                         type="text",
+                         font.size="small", 
+                         table.placement="H",
+                         column.sep.width = "1pt", 
+                         title = "Resultados: Fuente de tratamiento, creencia e intención de compartir", 
+                         dep.var.labels.include = FALSE,
+                         column.labels = c("Creencia", "Compartir:Email", "Compartir:Facebook"),
+                         covariate.labels = c("Tratamiento: Fuente"),
+                         digits = 2)
+```
+
+
+```{r,echo=FALSE,warning=FALSE,comment=NA}
+stargazer::stargazer(lm1,lm4,lm5,
+                     header=FALSE,
+                         summary = TRUE,
+                         type="text",
+                         font.size="small", 
+                         table.placement="H",
+                         column.sep.width = "1pt", 
+                         title = "Resultados: Fuente de tratamiento, creencia e intención de compartir", 
+                         dep.var.labels.include = FALSE,
+                         column.labels = c("Creencia","Compartir:Twitter","Compartir:Whatsapp"),
+                         covariate.labels = c("Tratamiento: Fuente"),
+                         digits = 2)
+```
+
+\newpage
+
+## 9. Hay dos covariables más aún no utilizadas (educación e ingreso). Realice algún análisis para identificar si tiene alguna significancia el incluirlas como controles.
+
+Primero observamos que el valor p es mayor al nivel de significancia en el caso del ingreso con base en haber recibido la noticia verdadera o falsa. Así, no rechazamos la hipótesis nula de que la diferencia del promedio sea igual a cero. 
+```{r,echo=FALSE}
+#Exploratory analysis, and t.test and balance table for only education and income
+
+i0 <- datos$x_income_num[datos$d_treatment_source == 0]
+i1 <- datos$x_income_num[datos$d_treatment_source == 1]
+t.test(i1,i0)
+```
+
+Con base en la educación del mismo modo observamos un valor p mayor al nivel de significancia y no rechazamos la hipotesis nula de que la diferencia del promedio sea igual a cero. 
+```{r,echo=FALSE}
+e0 <- datos$x_education_num[datos$d_treatment_source == 0]
+e1 <- datos$x_education_num[datos$d_treatment_source == 1]
+t.test(e1,e0)
+```
+
+```{r, echo=FALSE,comment=NA}
+t.test(y_share_report_fb_num~ d_treatment_source,
+         data = datos, 
+         na.action = "na.omit", 
+         var.equal = TRUE)
+```
+
+En ambos casos no se observa una diferencia entre el grupo de tratamiento y control en el promedio de ingreso y educación. Lo cual mantiene balance.
+
+Observamos el ingreso de los encuestados:  
+```{r,echo=FALSE,warning=FALSE}
+ggplot(datos, aes(x = x_income_fac)) +
+  geom_bar(fill="#000080", color="black") +
+   theme_classic()+
+    xlab("Ingreso")+
+  ggtitle("Gráfico: Ingreso de los encuestados")+
+  theme(axis.text = element_text(angle = 20))
+```
+
+```{r,warning=FALSE,echo=FALSE}
+ggplot(data=datos, aes(x=x_income_num)) +
+  geom_histogram(fill="#000080", color="black",binwidth = 1) +
+  xlab("Ingreso")+
+  theme_classic()+
+  ggtitle("Histograma: Ingreso de los encuestados")
+```
+
+
+Nivel de educación de los encuestados:  
+```{r,echo=FALSE,warning=FALSE}
+ggplot(datos, aes(x = x_education_fac)) +
+  geom_bar(fill="#000080", color="black") +
+   theme_classic()+
+    xlab("Educación")+
+  ggtitle("Gráfico: Educación de los encuestados")+
+  theme(axis.text = element_text(angle = 20))
+```
+  
+```{r,warning=FALSE,echo=FALSE}
+ggplot(data=datos, aes(x=x_education_num)) +
+  geom_histogram(fill="#000080", color="black",binwidth = 0.95) +
+  ggtitle("Histograma: Nivel de educación de los encuestados")+
+  xlab("Nivel de educación de los encuestados")+
+  theme_classic()
+
+```
+
+Incluirlas en el modelo debería implicar relevancia teórica la cual sí tiene, pues como se commentó anteriormmente tanto la educación como el ingreso pueden determinar si una persona va a compartir una noticia falsa o no. A su vez, es relevante para el objeto de estudio que es la difusión de las nnoticias falsas el nivel de ingresos y educación de las personas que interactuan en distintas redes sociales y comparten información. Con lo visto al inicio de esta pregunta observamos que no hay diferencias enntre los datos de tratamiento y control por lo que se encuentran balanceados. 
+Ahora bajo un modelo lineal simple observamos lo siguiente
+
+
+```{r,echo=FALSE,include=FALSE}
+modelo_tratamiento <- lm(y_belief_report_num ~d_treatment_source, data = datos)
+modelo_covariable <- lm(y_belief_report_num ~d_treatment_source + x_income_num+x_education_num, data = datos)
+```
+
+Observamos que agregar el ingreso no es significativo y no hay una mejoría significativa del tratamiento. Así, no las agregaría en el caso de creencia en el reporte y con base en ello tampoco en el resto. 
+```{r,echo=FALSE,comment=NA}
+summary(modelo_tratamiento)
+summary(modelo_covariable)
+```
+
+
+
+
+
+
+
+
+
+
